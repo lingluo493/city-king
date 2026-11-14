@@ -72,7 +72,7 @@
   .panel .hint b { color: var(--text); }
 
   .table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 920px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 800px; }
   thead th {
     background: var(--primary-soft); color: var(--text); font-size: 13px; text-align: left;
     padding: 10px 12px; border-bottom: 2px solid var(--border); white-space: nowrap;
@@ -126,7 +126,7 @@
   .note-input:focus { outline: none; background: #fff; border-color: var(--primary); }
 
   .car-name { font-weight: 600; white-space: nowrap; }
-  .actions { display: flex; gap: 6px; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .actions .hit { background: var(--danger); }
   .actions .cancel { background: var(--card); color: var(--muted); border: 1px solid var(--border); }
   .actions .reset { background: var(--card); color: var(--ok); border: 1px solid var(--ok); }
@@ -141,6 +141,36 @@
     box-shadow: 0 4px 16px rgba(0,0,0,.25); max-width: 80vw;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* 手机端优化 */
+  @media (max-width: 720px) {
+    body { padding: 12px 8px 40px; }
+    header h1 { font-size: 18px; }
+    header .sub { font-size: 12px; }
+    .topbtns button { padding: 7px 10px; font-size: 13px; }
+    .stats { gap: 6px; }
+    .stat { min-width: 88px; padding: 8px 10px; flex: 1 1 30%; }
+    .stat .num { font-size: 16px; }
+    .panel { padding: 10px; gap: 8px; }
+    .panel select, .panel input[type="text"] { padding: 8px 9px; font-size: 14px; }
+    .panel .qbtn-hit { padding: 10px 12px; font-size: 14px; }
+    .panel .mini { padding: 8px 10px; font-size: 13px; }
+    #qPlayer { max-width: 140px !important; }
+    #qTime { width: 130px !important; }
+    table { min-width: 680px; font-size: 13px; }
+    thead th { padding: 8px 8px; }
+    tbody td { padding: 6px 8px; }
+    .actions { gap: 5px; }
+    .actions .mini { padding: 8px 10px; font-size: 13px; border-radius: 8px; }
+    .def-select { padding: 7px 6px; font-size: 13px; }
+    .set-time input { width: 80px; padding: 7px 8px; font-size: 13px; }
+    .set-time button { padding: 7px 9px; font-size: 13px; }
+    .note-input { min-width: 120px; font-size: 14px; padding: 7px 8px; }
+    .player-cell .pname { font-size: 14px; }
+    .pbtns .ghost { padding: 6px 8px; font-size: 12px; }
+    .badge { font-size: 12px; padding: 4px 9px; }
+    .legend { font-size: 11px; }
+  }
 </style>
 </head>
 <body>
@@ -352,12 +382,12 @@
     table.innerHTML = `
       <thead>
         <tr>
-          <th style="width:150px">玩家</th>
-          <th style="width:66px">战车</th>
-          <th style="width:92px">状态</th>
+          <th style="width:110px">玩家</th>
+          <th style="width:60px">战车</th>
+          <th style="width:86px">状态</th>
+          <th style="width:160px">操作</th>
           <th style="width:215px">剩余修复时间</th>
           <th>备注</th>
-          <th style="width:130px">操作</th>
         </tr>
       </thead>`;
     const tbody = document.createElement("tbody");
@@ -426,57 +456,6 @@
         tdS.appendChild(badge);
         tr.appendChild(tdS);
 
-        // 剩余时间
-        const tdT = document.createElement("td");
-        if (st === "repairing") {
-          const cd = document.createElement("div");
-          cd.className = "countdown";
-          const remain = c.defeatedAt + REPAIR_MS - Date.now();
-          cd.textContent = fmt(remain);
-          cdEls[c.id] = cd;
-          tdT.appendChild(cd);
-          const sub = document.createElement("div");
-          sub.className = "cd-sub";
-          sub.textContent = "预计 " + fmtClock(c.defeatedAt + REPAIR_MS) + " 完成";
-          tdT.appendChild(sub);
-          const setBox = document.createElement("div");
-          setBox.className = "set-time";
-          const inp = document.createElement("input");
-          inp.placeholder = "如 90 或 1:30";
-          inp.title = "输入剩余时间：纯数字=分钟，1:30=1小时30分";
-          const btn = mkBtn("设定", "mini", () => {
-            const ms = parseRemain(inp.value);
-            if (ms === null) { toast("格式不对：输入分钟数（如 90）或 时:分（如 1:30）"); return; }
-            c.defeatedAt = Date.now() + ms - REPAIR_MS;
-            notifiedDone.delete(c.id);
-            saveData(); render();
-            toast(`玩家 ${pi + 1} 战车 ${ci + 1} 剩余修复时间已设为 ${fmt(ms)}`);
-          });
-          inp.addEventListener("keydown", e => { if (e.key === "Enter") btn.click(); });
-          setBox.appendChild(inp); setBox.appendChild(btn);
-          tdT.appendChild(setBox);
-        } else if (st === "done") {
-          const cd = document.createElement("div");
-          cd.className = "countdown finished";
-          cd.textContent = "00:00:00";
-          tdT.appendChild(cd);
-        } else {
-          tdT.innerHTML = `<span style="color:var(--muted)">—</span>`;
-        }
-        tr.appendChild(tdT);
-
-        // 备注（自由文本）
-        const tdNote = document.createElement("td");
-        const note = document.createElement("input");
-        note.type = "text";
-        note.className = "note-input";
-        note.placeholder = "如：套路 / 非套路";
-        note.value = c.note || "";
-        note.maxLength = 40;
-        note.addEventListener("input", () => { c.note = note.value; saveData(); });
-        tdNote.appendChild(note);
-        tr.appendChild(tdNote);
-
         // 操作
         const tdA = document.createElement("td");
         const acts = document.createElement("div");
@@ -534,6 +513,57 @@
         }
         tdA.appendChild(acts);
         tr.appendChild(tdA);
+
+        // 剩余时间
+        const tdT = document.createElement("td");
+        if (st === "repairing") {
+          const cd = document.createElement("div");
+          cd.className = "countdown";
+          const remain = c.defeatedAt + REPAIR_MS - Date.now();
+          cd.textContent = fmt(remain);
+          cdEls[c.id] = cd;
+          tdT.appendChild(cd);
+          const sub = document.createElement("div");
+          sub.className = "cd-sub";
+          sub.textContent = "预计 " + fmtClock(c.defeatedAt + REPAIR_MS) + " 完成";
+          tdT.appendChild(sub);
+          const setBox = document.createElement("div");
+          setBox.className = "set-time";
+          const inp = document.createElement("input");
+          inp.placeholder = "如 90 或 1:30";
+          inp.title = "输入剩余时间：纯数字=分钟，1:30=1小时30分";
+          const btn = mkBtn("设定", "mini", () => {
+            const ms = parseRemain(inp.value);
+            if (ms === null) { toast("格式不对：输入分钟数（如 90）或 时:分（如 1:30）"); return; }
+            c.defeatedAt = Date.now() + ms - REPAIR_MS;
+            notifiedDone.delete(c.id);
+            saveData(); render();
+            toast(`玩家 ${pi + 1} 战车 ${ci + 1} 剩余修复时间已设为 ${fmt(ms)}`);
+          });
+          inp.addEventListener("keydown", e => { if (e.key === "Enter") btn.click(); });
+          setBox.appendChild(inp); setBox.appendChild(btn);
+          tdT.appendChild(setBox);
+        } else if (st === "done") {
+          const cd = document.createElement("div");
+          cd.className = "countdown finished";
+          cd.textContent = "00:00:00";
+          tdT.appendChild(cd);
+        } else {
+          tdT.innerHTML = `<span style="color:var(--muted)">—</span>`;
+        }
+        tr.appendChild(tdT);
+
+        // 备注（自由文本）
+        const tdNote = document.createElement("td");
+        const note = document.createElement("input");
+        note.type = "text";
+        note.className = "note-input";
+        note.placeholder = "如：套路 / 非套路";
+        note.value = c.note || "";
+        note.maxLength = 40;
+        note.addEventListener("input", () => { c.note = note.value; saveData(); });
+        tdNote.appendChild(note);
+        tr.appendChild(tdNote);
 
         tbody.appendChild(tr);
         (rowEls[pi] = rowEls[pi] || []).push(tr);
