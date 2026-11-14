@@ -252,7 +252,7 @@
 
   <div class="legend">
     · <b>多人协作</b>：群里所有人打开同一个链接即可共同编辑。顶部先填「我的昵称」，你的每次改动会标记是谁改的。改动自动同步（约 8 秒轮询），也可点「手动刷新」立即拉取。<br>
-    · <b>帮派隔离</b>：不同帮派用不同链接，互不干扰。1 号帮派用 <b>?g=1</b>，2 号帮派用 <b>?g=2</b>（或直接在顶部输入帮派名点「切换帮派」）。不带参数的链接是默认公共数据。<br>
+    · <b>帮派隔离</b>：每个帮派用各自的专属链接，进入后<b>已锁定</b>——只能看到并编辑本帮派的数据，看不到其他帮派，也不能切换。主页（不带参数）才显示帮派入口。<br>
     · <b>改名</b>：点击表格中玩家名字直接输入。<b>清空</b>：点一次变红色「确认清空」，再点一次清掉该玩家。<br>
     · <b>剩余修复时间</b>：点「被击败 ⚔」默认 2 小时倒计时；可输入剩余时间（如 <b>90</b> 分钟或 <b>1:30</b>）点「设定」覆盖。<br>
     · <b>防守</b>：可出战的战车可选防守位 P1~P6；防守中可取消防守或直接标记被击败。<br>
@@ -968,9 +968,12 @@
   const guildBadge = document.getElementById("guildBadge");
   const guildInput = document.getElementById("guildInput");
   if (GUILD) {
+    // 进入指定帮派：锁定，隐藏切换控件，只看本帮派数据
     guildBadge.style.display = "";
-    guildBadge.textContent = "🛡 帮派：" + GUILD;
-    guildInput.value = GUILD;
+    guildBadge.textContent = "🛡 帮派：" + GUILD + "（已锁定）";
+    guildInput.style.display = "none";
+    document.getElementById("btnGuild").style.display = "none";
+    document.getElementById("guildPresets").style.display = "none";
   }
   function gotoGuild() {
     const g = guildInput.value.trim().replace(/[^\w\u4e00-\u9fa5-]/g, "").slice(0, 16);
@@ -981,21 +984,22 @@
   document.getElementById("btnGuild").addEventListener("click", gotoGuild);
   guildInput.addEventListener("keydown", (ev) => { if (ev.key === "Enter") gotoGuild(); });
 
-  // 预设帮派快捷入口（一键跳转，数据自动创建）
+  // 预设帮派快捷入口（仅默认主页显示；带 ?g= 的帮派链接不显示，防止串帮）
   const PRESET_GUILDS = ["风铃儿", "风动护花铃", "风动撼花铃"];
   const presetBox = document.getElementById("guildPresets");
-  PRESET_GUILDS.forEach(g => {
-    const b = document.createElement("button");
-    b.className = "ghost mini";
-    b.style.flex = "0 0 auto";
-    if (GUILD === g) { b.style.background = "var(--primary)"; b.style.color = "#fff"; b.style.borderColor = "var(--primary)"; }
-    b.textContent = "🛡 " + g;
-    b.title = "进入帮派「" + g + "」的独立数据";
-    b.addEventListener("click", () => {
-      location.href = location.origin + location.pathname + "?g=" + encodeURIComponent(g);
+  if (!GUILD) {
+    PRESET_GUILDS.forEach(g => {
+      const b = document.createElement("button");
+      b.className = "ghost mini";
+      b.style.flex = "0 0 auto";
+      b.textContent = "🛡 " + g;
+      b.title = "进入帮派「" + g + "」的独立数据";
+      b.addEventListener("click", () => {
+        location.href = location.origin + location.pathname + "?g=" + encodeURIComponent(g);
+      });
+      presetBox.appendChild(b);
     });
-    presetBox.appendChild(b);
-  });
+  }
 
   document.getElementById("btnExport").addEventListener("click", () => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
