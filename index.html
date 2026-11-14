@@ -1025,24 +1025,12 @@
       guildBadge.style.display = "none";
       guildInput.style.display = "none";
       btnGuild.style.display = "none";
-      presetBox.style.display = "";
+      presetBox.style.display = "none";
     }
   }
 
-  // 预设帮派快捷入口（仅单机模式默认页显示，点击后回到密码门）
-  const PRESET_GUILDS = ["风铃儿", "风动护花铃", "风动撼花铃"];
-  PRESET_GUILDS.forEach(g => {
-    const b = document.createElement("button");
-    b.className = "ghost mini";
-    b.style.flex = "0 0 auto";
-    b.textContent = "🛡 " + g;
-    b.title = "进入帮派「" + g + "」（需输入对应密码）";
-    b.addEventListener("click", () => {
-      localStorage.removeItem("ck_auth");
-      location.reload();
-    });
-    presetBox.appendChild(b);
-  });
+  // 帮派切换入口已全部由密码门接管，面板中不再显示任何帮派选项按钮
+  presetBox.style.display = "none";
 
   document.getElementById("btnExport").addEventListener("click", () => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
