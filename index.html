@@ -144,6 +144,34 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+  /* ---------- 密码门 ---------- */
+  #authGate {
+    display: none; position: fixed; inset: 0; z-index: 9999;
+    background: linear-gradient(160deg, #eef2ff 0%, #e4ebff 100%);
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  .auth-box {
+    background: #fff; border: 1px solid var(--border); border-radius: 16px;
+    padding: 30px 28px 24px; width: min(92vw, 380px);
+    box-shadow: 0 10px 40px rgba(79,124,255,.15); text-align: center;
+  }
+  .auth-box h1 { font-size: 20px; margin: 0 0 8px; }
+  .auth-box p { color: var(--muted); font-size: 13px; margin: 0 0 18px; line-height: 1.6; }
+  #authPass {
+    width: 100%; box-sizing: border-box; padding: 11px 12px; font-size: 16px;
+    border: 1px solid var(--border); border-radius: 9px; text-align: center; margin-bottom: 12px;
+  }
+  #authPass:focus { outline: none; border-color: var(--primary); }
+  .auth-row { display: flex; gap: 10px; }
+  .auth-row button {
+    flex: 1; padding: 11px; font-size: 14px; border-radius: 9px; cursor: pointer;
+    border: 1px solid var(--border); background: #fff; color: var(--text); font-weight: 600;
+  }
+  .auth-row button:active { transform: translateY(1px); }
+  #authGo { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .auth-remember { font-size: 12px; color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 12px; cursor: pointer; }
+  #authErr { color: var(--danger); font-size: 12px; min-height: 16px; margin-top: 8px; }
+
   /* 手机端优化 */
   @media (max-width: 720px) {
     body { padding: 12px 8px 40px; }
@@ -206,6 +234,7 @@
       <input type="text" id="myNick" placeholder="我的昵称（标记是谁改的）" maxlength="12" style="width:190px">
       <span class="hint" id="syncInfo">正在连接云端…</span>
       <button class="ghost mini" id="btnSync">手动刷新</button>
+      <button class="ghost mini" id="btnSwitch">切换身份</button>
       <input type="text" id="guildInput" placeholder="帮派名" maxlength="16" style="width:110px">
       <button class="ghost mini" id="btnGuild">切换帮派</button>
       <span id="guildPresets" style="display:inline-flex;gap:4px;flex-wrap:wrap"></span>
@@ -252,7 +281,7 @@
 
   <div class="legend">
     · <b>多人协作</b>：群里所有人打开同一个链接即可共同编辑。顶部先填「我的昵称」，你的每次改动会标记是谁改的。改动自动同步（约 8 秒轮询），也可点「手动刷新」立即拉取。<br>
-    · <b>帮派隔离</b>：每个帮派用各自的专属链接，进入后<b>已锁定</b>——只能看到并编辑本帮派的数据，看不到其他帮派，也不能切换。主页（不带参数）才显示帮派入口。<br>
+    · <b>帮派隔离</b>：打开页面先输入帮派密码进入对应帮派（只看本帮派数据，互相隔离）；不输密码点「单机模式」则数据仅存本机。右上角「切换身份」可换帮派或回到单机。<br>
     · <b>改名</b>：点击表格中玩家名字直接输入。<b>清空</b>：点一次变红色「确认清空」，再点一次清掉该玩家。<br>
     · <b>剩余修复时间</b>：点「被击败 ⚔」默认 2 小时倒计时；可输入剩余时间（如 <b>90</b> 分钟或 <b>1:30</b>）点「设定」覆盖。<br>
     · <b>防守</b>：可出战的战车可选防守位 P1~P6；防守中可取消防守或直接标记被击败。<br>
@@ -260,6 +289,20 @@
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <div id="authGate">
+    <div class="auth-box">
+      <h1>🐱 城市之王 · 战车指挥台</h1>
+      <p>输入帮派密码进入对应帮派的共享数据<br>不输入密码可直接进入单机模式（数据仅存本机）</p>
+      <input type="password" id="authPass" placeholder="帮派密码" autocomplete="off">
+      <div class="auth-row">
+        <button id="authGo">进入帮派</button>
+        <button id="authSolo">单机模式</button>
+      </div>
+      <label class="auth-remember"><input type="checkbox" id="authRemember" checked> 记住选择，下次免输入</label>
+      <div id="authErr"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -269,24 +312,19 @@
   const CARS_PER_PLAYER = 3;
 
   // ============ 云端配置（部署时替换 TOKEN） ============
-  // 帮派隔离：链接加 ?g=帮派名 即用独立数据文件 data-帮派名.json，互不干扰
-  const GUILD = (function () {
-    try {
-      const m = (location.search || "").match(/[?&]g=([^&]+)/);
-      if (!m) return "";
-      return decodeURIComponent(m[1]).replace(/[^\w\u4e00-\u9fa5-]/g, "").slice(0, 16);
-    } catch (e) { return ""; }
-  })();
+  // 帮派通过密码门选择：密码 → 独立数据文件 data-帮派名.json，互不干扰；不输密码则单机模式
+  let GUILD = "";
+  if (location.search) history.replaceState(null, "", location.pathname); // 旧版 ?g= 链接统一清理，入口一律走密码门
   const CLOUD = {
     owner: "lingluo493",
     repo: "city-king",
     branch: "main",
-    path: GUILD ? "data-" + GUILD + ".json" : "data.json",
+    path: "data.json",
     token: ["github_pat_11CGRQKUQ0KQL3kcNguZTb", "_mYE6d1jtJOjAgAWY8WMMg578GLMKD5k5GS8eDfvL7EMWCW7KNGJPAiY3dlp"].join("")
   };
-  const CLOUD_ON = CLOUD.token && !CLOUD.token.startsWith("__");
+  let CLOUD_ON = CLOUD.token && !CLOUD.token.startsWith("__");
   const API_BASE = "https://api.github.com/repos/" + CLOUD.owner + "/" + CLOUD.repo;
-  const CACHE_KEY = "catwar_cityking_cloud" + (GUILD ? "_" + GUILD : "");
+  let CACHE_KEY = "catwar_cityking_cloud";
   const POLL_MS = 8000;
 
   const notifiedDone = new Set();
@@ -964,42 +1002,47 @@
     } catch (e) { handleCloudError(e); }
   });
 
-  // ---------- 帮派隔离 ----------
+  // ---------- 帮派隔离（由密码门驱动） ----------
   const guildBadge = document.getElementById("guildBadge");
   const guildInput = document.getElementById("guildInput");
-  if (GUILD) {
-    // 进入指定帮派：锁定，隐藏切换控件，只看本帮派数据
-    guildBadge.style.display = "";
-    guildBadge.textContent = "🛡 帮派：" + GUILD + "（已锁定）";
-    guildInput.style.display = "none";
-    document.getElementById("btnGuild").style.display = "none";
-    document.getElementById("guildPresets").style.display = "none";
-  }
-  function gotoGuild() {
-    const g = guildInput.value.trim().replace(/[^\w\u4e00-\u9fa5-]/g, "").slice(0, 16);
-    if (!g) { toast("请输入帮派名，例如 1 或 一帮"); return; }
-    const base = location.origin + location.pathname;
-    location.href = base + "?g=" + encodeURIComponent(g);
-  }
-  document.getElementById("btnGuild").addEventListener("click", gotoGuild);
-  guildInput.addEventListener("keydown", (ev) => { if (ev.key === "Enter") gotoGuild(); });
-
-  // 预设帮派快捷入口（仅默认主页显示；带 ?g= 的帮派链接不显示，防止串帮）
-  const PRESET_GUILDS = ["风铃儿", "风动护花铃", "风动撼花铃"];
   const presetBox = document.getElementById("guildPresets");
-  if (!GUILD) {
-    PRESET_GUILDS.forEach(g => {
-      const b = document.createElement("button");
-      b.className = "ghost mini";
-      b.style.flex = "0 0 auto";
-      b.textContent = "🛡 " + g;
-      b.title = "进入帮派「" + g + "」的独立数据";
-      b.addEventListener("click", () => {
-        location.href = location.origin + location.pathname + "?g=" + encodeURIComponent(g);
-      });
-      presetBox.appendChild(b);
-    });
+  const btnGuild = document.getElementById("btnGuild");
+
+  function applyAuth(mode, guild) {
+    if (mode === "guild" && guild) {
+      GUILD = guild;
+      CLOUD.path = "data-" + guild + ".json";
+      CACHE_KEY = "catwar_cityking_cloud_" + guild;
+      CLOUD_ON = true;
+      guildBadge.style.display = "";
+      guildBadge.textContent = "🛡 帮派：" + guild;
+      guildInput.style.display = "none";
+      btnGuild.style.display = "none";
+      presetBox.style.display = "none";
+    } else {
+      GUILD = "";
+      CLOUD_ON = false;
+      guildBadge.style.display = "none";
+      guildInput.style.display = "none";
+      btnGuild.style.display = "none";
+      presetBox.style.display = "";
+    }
   }
+
+  // 预设帮派快捷入口（仅单机模式默认页显示，点击后回到密码门）
+  const PRESET_GUILDS = ["风铃儿", "风动护花铃", "风动撼花铃"];
+  PRESET_GUILDS.forEach(g => {
+    const b = document.createElement("button");
+    b.className = "ghost mini";
+    b.style.flex = "0 0 auto";
+    b.textContent = "🛡 " + g;
+    b.title = "进入帮派「" + g + "」（需输入对应密码）";
+    b.addEventListener("click", () => {
+      localStorage.removeItem("ck_auth");
+      location.reload();
+    });
+    presetBox.appendChild(b);
+  });
 
   document.getElementById("btnExport").addEventListener("click", () => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -1054,9 +1097,70 @@
     }
   });
 
+  // ---------- 密码门 ----------
+  const GUILD_PASS = {
+    "fengling": "风铃儿",
+    "huhualing": "风动护花铃",
+    "hanhualing": "风动撼花铃"
+  };
+  const gateEl = document.getElementById("authGate");
+  const passEl = document.getElementById("authPass");
+  const authErrEl = document.getElementById("authErr");
+
+  function startApp() {
+    data = loadCache();
+    render();
+    if (CLOUD_ON) {
+      cloudInit();
+    } else {
+      setSync("🔒 单机模式：数据仅保存在本机浏览器");
+    }
+  }
+
+  function authEnter(mode, guild) {
+    if (document.getElementById("authRemember").checked) {
+      localStorage.setItem("ck_auth", JSON.stringify({ mode: mode, guild: guild || "" }));
+    }
+    gateEl.style.display = "none";
+    applyAuth(mode, guild);
+    startApp();
+  }
+
+  document.getElementById("authGo").addEventListener("click", () => {
+    const g = GUILD_PASS[passEl.value.trim()];
+    if (!g) {
+      authErrEl.textContent = "密码不正确，请重新输入（或点「单机模式」直接进入）";
+      passEl.value = "";
+      passEl.focus();
+      return;
+    }
+    authErrEl.textContent = "";
+    authEnter("guild", g);
+  });
+  passEl.addEventListener("keydown", ev => { if (ev.key === "Enter") document.getElementById("authGo").click(); });
+  document.getElementById("authSolo").addEventListener("click", () => authEnter("solo", ""));
+
+  // 切换身份：清除记忆并回到密码门
+  document.getElementById("btnSwitch").addEventListener("click", () => {
+    localStorage.removeItem("ck_auth");
+    location.reload();
+  });
+
   // ---------- 启动 ----------
-  render();
-  if (CLOUD_ON) cloudInit(); else setSync("未配置云端令牌，当前为单机模式", "err");
+  let savedAuth = null;
+  try { savedAuth = JSON.parse(localStorage.getItem("ck_auth")); } catch (e) {}
+  const authOk = savedAuth && (
+    savedAuth.mode === "solo" ||
+    (savedAuth.mode === "guild" && Object.keys(GUILD_PASS).some(k => GUILD_PASS[k] === savedAuth.guild))
+  );
+  if (authOk) {
+    gateEl.style.display = "none";
+    applyAuth(savedAuth.mode, savedAuth.guild);
+    startApp();
+  } else {
+    gateEl.style.display = "flex";
+    passEl.focus();
+  }
 })();
 </script>
 </body>
