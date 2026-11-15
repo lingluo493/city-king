@@ -213,6 +213,7 @@
     <div class="topbtns">
       <button class="ghost" id="btnExport">导出数据</button>
       <button class="ghost" id="btnImport">导入数据</button>
+      <button class="ghost" id="btnClearState">清除状态</button>
       <button class="ghost" id="btnClearAll">清空全部</button>
     </div>
     <input type="file" id="importFile" accept=".json" style="display:none">
@@ -957,8 +958,8 @@
 
   // ---------- 倒计时 tick ----------
   setInterval(() => {
-    let doneNow = null;
     if (!isTyping()) updateQuickHint();
+    const finished = [];
     data.forEach((p, pi) => p.cars.forEach((c, ci) => {
       if (c.defeatedAt) {
         const remain = c.defeatedAt + REPAIR_MS - Date.now();
@@ -969,13 +970,24 @@
         }
         if (remain <= 0 && !notifiedDone.has(c.id)) {
           notifiedDone.add(c.id);
-          doneNow = { pi, ci };
+          finished.push({ pi: pi, ci: ci, id: c.id });
         }
       }
     }));
-    if (doneNow) {
-      toast(`✅ 玩家 ${doneNow.pi + 1} 的战车 ${doneNow.ci + 1} 修复完成！`);
+    if (finished.length) {
+      // 修复完成 → 自动恢复可出战（本地 + 云端同步）
+      finished.forEach(f => { data[f.pi].cars[f.ci].defeatedAt = null; });
+      saveCache();
       if (!isTyping()) render();
+      toast(finished.map(f => `✅ 玩家 ${f.pi + 1} 战车 ${f.ci + 1} 修复完成，已自动可出战`).join("　"));
+      if (CLOUD_ON) {
+        cloudWrite(ps => {
+          finished.forEach(f => {
+            const c = ps[f.pi] && ps[f.pi].cars[f.ci];
+            if (c && c.id === f.id) c.defeatedAt = null;
+          });
+        }, "⏱ 修复完成，自动恢复可出战");
+      }
     }
   }, 1000);
 
@@ -1079,6 +1091,41 @@
       setTimeout(() => {
         this.dataset.armed = "";
         this.textContent = "清空全部";
+        this.style.background = "";
+        this.style.color = "";
+      }, 4000);
+    }
+  });
+
+  // 清除状态：清掉所有战车的防守/修复数据，保留玩家昵称和备注
+  document.getElementById("btnClearState").addEventListener("click", function () {
+    if (this.dataset.armed === "1") {
+      this.dataset.armed = "";
+      this.textContent = "清除状态";
+      this.style.background = "";
+      this.style.color = "";
+      const cleared = Array.from({ length: PLAYER_COUNT }, (_, i) => ({
+        id: data[i].id,
+        name: data[i].name,
+        cars: data[i].cars.map(c => ({ id: c.id, note: c.note, defeatedAt: null, defense: 0 }))
+      }));
+      data = cleared; saveCache(); render();
+      toast("已清除全部防守/修复状态，玩家昵称保留");
+      cloudWrite(ps => {
+        ps.forEach((p, i) => {
+          if (!cleared[i]) return;
+          p.name = cleared[i].name;
+          cleared[i].cars.forEach((c, ci) => { if (ps[i].cars[ci]) ps[i].cars[ci] = c; });
+        });
+      }, "♻ 清除全部防守/修复状态（保留昵称）");
+    } else {
+      this.dataset.armed = "1";
+      this.textContent = "确认清除？再点一次";
+      this.style.background = "var(--danger)";
+      this.style.color = "#fff";
+      setTimeout(() => {
+        this.dataset.armed = "";
+        this.textContent = "清除状态";
         this.style.background = "";
         this.style.color = "";
       }, 4000);
