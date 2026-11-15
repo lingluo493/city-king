@@ -214,7 +214,7 @@
       <button class="ghost" id="btnExport">导出数据</button>
       <button class="ghost" id="btnImport">导入数据</button>
       <button class="ghost" id="btnClearState">清除状态</button>
-      <button class="ghost" id="btnClearAll">清空全部</button>
+      <button class="ghost" id="btnClearAll" style="display:none">清空全部</button>
     </div>
     <input type="file" id="importFile" accept=".json" style="display:none">
   </header>
@@ -1073,29 +1073,8 @@
     e.target.value = "";
   });
 
-  document.getElementById("btnClearAll").addEventListener("click", function () {
-    if (this.dataset.armed === "1") {
-      this.dataset.armed = "";
-      this.textContent = "清空全部";
-      this.style.background = "";
-      this.style.color = "";
-      const fresh = Array.from({ length: PLAYER_COUNT }, (_, i) => blankPlayer(i));
-      data = fresh; saveCache(); render();
-      toast("已清空全部数据");
-      cloudWrite(ps => { fresh.forEach((p, i) => { ps[i] = p; }); }, "🗑 清空全部数据");
-    } else {
-      this.dataset.armed = "1";
-      this.textContent = "确认清空？再点一次";
-      this.style.background = "var(--danger)";
-      this.style.color = "#fff";
-      setTimeout(() => {
-        this.dataset.armed = "";
-        this.textContent = "清空全部";
-        this.style.background = "";
-        this.style.color = "";
-      }, 4000);
-    }
-  });
+  // 「清空全部」功能已禁用（按钮隐藏且不绑定任何事件），如需恢复另行开启
+
 
   // 清除状态：清掉所有战车的防守/修复数据，保留玩家昵称和备注
   document.getElementById("btnClearState").addEventListener("click", function () {
