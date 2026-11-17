@@ -323,9 +323,10 @@
     path: "data.json",
     token: ["github_pat_11CGRQKUQ0KQL3kcNguZTb", "_mYE6d1jtJOjAgAWY8WMMg578GLMKD5k5GS8eDfvL7EMWCW7KNGJPAiY3dlp"].join("")
   };
-  let CLOUD_ON = CLOUD.token && !CLOUD.token.startsWith("__");
+  let CLOUD_ON = false; // 由密码门决定模式；进入前一律关闭，防止轮询覆盖本地缓存
   const API_BASE = "https://api.github.com/repos/" + CLOUD.owner + "/" + CLOUD.repo;
   let CACHE_KEY = "catwar_cityking_cloud";
+  let modeReady = false; // 密码门确认模式后才允许任何读/写/自动操作
   const POLL_MS = 8000;
 
   const notifiedDone = new Set();
@@ -527,6 +528,7 @@
 
   // 所有修改都通过 cloudWrite：先拉最新 → 应用变更 → 推回（冲突自动重试）
   async function cloudWrite(mutator, label) {
+    if (!modeReady) return; // 密码门未确认前禁止任何云端写入
     if (!CLOUD_ON) { mutator(data); saveCache(); render(); return; }
     if (cloudBusy) { setTimeout(() => cloudWrite(mutator, label), 500); return; }
     cloudBusy = true;
@@ -572,7 +574,7 @@
 
   // 轮询别人的改动
   setInterval(async () => {
-    if (!CLOUD_ON || cloudBusy || Date.now() < rateLimitUntil) return;
+    if (!modeReady || !CLOUD_ON || cloudBusy || Date.now() < rateLimitUntil) return;
     try {
       const r = await cloudGet();
       if (r.sha && r.sha !== cloudSha && r.blob) {
@@ -958,6 +960,7 @@
 
   // ---------- 倒计时 tick ----------
   setInterval(() => {
+    if (!modeReady) return; // 密码门未确认模式前不处理任何数据
     if (!isTyping()) updateQuickHint();
     const finished = [];
     data.forEach((p, pi) => p.cars.forEach((c, ci) => {
@@ -1122,6 +1125,7 @@
   const authErrEl = document.getElementById("authErr");
 
   function startApp() {
+    modeReady = true; // 模式已确定，允许 tick / 轮询 / 云端操作
     data = loadCache();
     render();
     if (CLOUD_ON) {
